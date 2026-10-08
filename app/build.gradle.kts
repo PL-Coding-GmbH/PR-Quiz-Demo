@@ -2,6 +2,8 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.ksp)
+  alias(libs.plugins.room)
 }
 
 android {
@@ -43,6 +45,10 @@ kotlin {
     jvmToolchain(17)
 }
 
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
@@ -76,6 +82,12 @@ dependencies {
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
+
+  // Persistence and background sync
+  implementation(libs.room.runtime)
+  ksp(libs.room.compiler)
+  implementation(libs.work.runtime.ktx)
+  androidTestImplementation(libs.kotlinx.coroutines.test)
 
   // Navigation
   implementation(libs.androidx.navigation3.ui)

@@ -24,6 +24,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.prquizdemo.data.Quote
+import com.example.prquizdemo.data.QuoteWithFavorite
 import com.example.prquizdemo.theme.PRQuizDemoTheme
 
 @Composable
@@ -57,22 +58,25 @@ fun QuoteListScreen(
         singleLine = true,
         modifier = Modifier.weight(1f),
       )
-      TextButton(onClick = onRefresh) { Text("Refresh") }
+      TextButton(onClick = onRefresh, enabled = !state.isRefreshing) { Text("Refresh") }
     }
     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    if (state.isShowingSavedQuotes) {
+      Text("You're offline. Showing saved quotes.", style = MaterialTheme.typography.labelLarge)
+    }
     Box(Modifier.fillMaxSize()) {
       LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(state.items, key = { it.quote.id }) { item ->
           QuoteCard(item, onClick = { onQuoteClick(item.quote.id) }, onToggleFavorite = { onToggleFavorite(item.quote.id) })
         }
       }
-      if (state.isLoading) CircularProgressIndicator(Modifier.align(Alignment.Center))
+      if (state.isRefreshing && state.items.isEmpty()) CircularProgressIndicator(Modifier.align(Alignment.Center))
     }
   }
 }
 
 @Composable
-private fun QuoteCard(item: QuoteItem, onClick: () -> Unit, onToggleFavorite: () -> Unit) {
+private fun QuoteCard(item: QuoteWithFavorite, onClick: () -> Unit, onToggleFavorite: () -> Unit) {
   Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
       Column(Modifier.weight(1f)) {
@@ -93,8 +97,8 @@ private fun QuoteListScreenPreview() {
         QuoteListState(
           items =
             listOf(
-              QuoteItem(Quote("1", "Make it work, make it right, make it fast.", "Kent Beck"), isFavorite = true),
-              QuoteItem(Quote("2", "Talk is cheap. Show me the code.", "Linus Torvalds"), isFavorite = false),
+              QuoteWithFavorite(Quote("1", "Make it work, make it right, make it fast.", "Kent Beck"), isFavorite = true),
+              QuoteWithFavorite(Quote("2", "Talk is cheap. Show me the code.", "Linus Torvalds"), isFavorite = false),
             )
         ),
       onQueryChange = {},

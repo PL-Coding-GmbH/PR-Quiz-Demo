@@ -34,7 +34,7 @@ fun MainNavigation() {
       entryProvider {
         entry<QuoteList> {
           QuoteListRoot(
-            viewModel = viewModel { QuoteListViewModel(container.quoteRepository, container.favoritesStore) },
+            viewModel = viewModel { QuoteListViewModel(container.quoteRepository) },
             onQuoteClick = { backStack.add(QuoteDetail(it)) },
             modifier = screenModifier,
           )
@@ -42,7 +42,7 @@ fun MainNavigation() {
         entry<QuoteDetail> { key ->
           QuoteDetailRoot(
             viewModel =
-              viewModel { QuoteDetailViewModel(key.quoteId, container.quoteRepository, container.favoritesStore) },
+              viewModel { QuoteDetailViewModel(key.quoteId, container.quoteRepository) },
             onBack = { backStack.removeLastOrNull() },
             modifier = screenModifier,
           )
