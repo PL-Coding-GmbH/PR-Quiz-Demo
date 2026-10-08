@@ -9,7 +9,7 @@ on:
 permissions:
   statuses: write
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: pr-quiz-${{ github.event.pull_request.number || github.event.issue.number }}
