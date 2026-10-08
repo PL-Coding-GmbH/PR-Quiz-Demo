@@ -1,16 +1,28 @@
 package com.example.prquizdemo.di
 
 import android.content.Context
-import com.example.prquizdemo.data.CachingQuoteRepository
-import com.example.prquizdemo.data.FavoritesStore
+import androidx.room.Room
+import androidx.work.WorkerFactory
+import com.example.prquizdemo.data.OfflineFirstQuoteRepository
 import com.example.prquizdemo.data.QuoteRepository
-import com.example.prquizdemo.data.SharedPreferencesFavoritesStore
+import com.example.prquizdemo.data.local.LegacyFavoritesImport
+import com.example.prquizdemo.data.local.QuoteDatabase
 import com.example.prquizdemo.data.remote.FakeQuoteApi
+import com.example.prquizdemo.data.sync.QuoteSyncScheduler
+import com.example.prquizdemo.data.sync.QuoteWorkerFactory
+import com.example.prquizdemo.data.sync.WorkManagerQuoteSyncScheduler
 
 /** App-wide singletons. Created once in [com.example.prquizdemo.PRQuizApp]. */
 class AppContainer(context: Context) {
-  val quoteRepository: QuoteRepository = CachingQuoteRepository(api = FakeQuoteApi())
 
-  val favoritesStore: FavoritesStore =
-    SharedPreferencesFavoritesStore(context.getSharedPreferences("favorites", Context.MODE_PRIVATE))
+  private val database =
+    Room.databaseBuilder(context, QuoteDatabase::class.java, "quotes.db")
+      .addCallback(LegacyFavoritesImport(context.getSharedPreferences("favorites", Context.MODE_PRIVATE)))
+      .build()
+
+  val quoteRepository: QuoteRepository = OfflineFirstQuoteRepository(api = FakeQuoteApi(), dao = database.quoteDao())
+
+  val quoteSyncScheduler: QuoteSyncScheduler = WorkManagerQuoteSyncScheduler(context)
+
+  val workerFactory: WorkerFactory = QuoteWorkerFactory(quoteRepository)
 }

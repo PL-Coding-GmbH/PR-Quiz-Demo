@@ -2,9 +2,8 @@ package com.example.prquizdemo.ui.quotes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.prquizdemo.data.FavoritesStore
-import com.example.prquizdemo.data.Quote
 import com.example.prquizdemo.data.QuoteRepository
+import com.example.prquizdemo.data.QuoteWithFavorite
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,41 +14,39 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class QuoteItem(val quote: Quote, val isFavorite: Boolean)
-
 data class QuoteListState(
   val query: String = "",
-  val items: List<QuoteItem> = emptyList(),
-  val isLoading: Boolean = false,
+  val items: List<QuoteWithFavorite> = emptyList(),
+  val isRefreshing: Boolean = false,
+  val isShowingSavedQuotes: Boolean = false,
   val errorMessage: String? = null,
 )
 
 @OptIn(FlowPreview::class)
-class QuoteListViewModel(private val repository: QuoteRepository, private val favoritesStore: FavoritesStore) :
-  ViewModel() {
+class QuoteListViewModel(private val repository: QuoteRepository) : ViewModel() {
 
   private val query = MutableStateFlow("")
-  private val quotes = MutableStateFlow<List<Quote>>(emptyList())
-  private val loadState = MutableStateFlow(LoadState())
+  private val refreshState = MutableStateFlow(RefreshState())
 
   val state: StateFlow<QuoteListState> =
-    combine(query, query.debounce(SEARCH_DEBOUNCE_MILLIS), quotes, favoritesStore.favoriteIds, loadState) {
+    combine(query, query.debounce(SEARCH_DEBOUNCE_MILLIS), repository.observeQuotes(), refreshState) {
         rawQuery,
         debouncedQuery,
         quotes,
-        favoriteIds,
-        loadState ->
+        refreshState ->
+        val refreshFailed = refreshState.errorMessage != null
         QuoteListState(
           query = rawQuery,
-          items = quotes.filter { it.matches(debouncedQuery) }.toItems(favoriteIds),
-          isLoading = loadState.isLoading,
-          errorMessage = loadState.errorMessage,
+          items = quotes.filter { it.matches(debouncedQuery) }.sortedForDisplay(),
+          isRefreshing = refreshState.isRefreshing,
+          isShowingSavedQuotes = refreshFailed && quotes.isNotEmpty(),
+          errorMessage = refreshState.errorMessage.takeIf { quotes.isEmpty() },
         )
       }
-      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuoteListState(isLoading = true))
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuoteListState(isRefreshing = true))
 
   init {
-    load(forceRefresh = false)
+    refresh()
   }
 
   fun onQueryChange(newQuery: String) {
@@ -57,36 +54,34 @@ class QuoteListViewModel(private val repository: QuoteRepository, private val fa
   }
 
   fun onRefresh() {
-    load(forceRefresh = true)
+    refresh()
   }
 
   fun onToggleFavorite(quoteId: String) {
+    val isFavorite = state.value.items.firstOrNull { it.quote.id == quoteId }?.isFavorite ?: return
+    viewModelScope.launch { repository.setFavorite(quoteId, !isFavorite) }
+  }
+
+  private fun refresh() {
     viewModelScope.launch {
-      val isFavorite = quoteId in favoritesStore.favoriteIds.value
-      favoritesStore.setFavorite(quoteId, !isFavorite)
+      refreshState.update { it.copy(isRefreshing = true) }
+      refreshState.value =
+        try {
+          repository.refresh()
+          RefreshState()
+        } catch (e: Exception) {
+          RefreshState(errorMessage = e.message ?: "Could not load quotes")
+        }
     }
   }
 
-  private fun load(forceRefresh: Boolean) {
-    viewModelScope.launch {
-      loadState.update { it.copy(isLoading = true, errorMessage = null) }
-      try {
-        quotes.value = repository.getQuotes(forceRefresh)
-        loadState.value = LoadState()
-      } catch (e: Exception) {
-        loadState.value = LoadState(errorMessage = e.message ?: "Could not load quotes")
-      }
-    }
-  }
+  private fun QuoteWithFavorite.matches(query: String): Boolean =
+    query.isBlank() || quote.text.contains(query, ignoreCase = true) || quote.author.contains(query, ignoreCase = true)
 
-  private fun Quote.matches(query: String): Boolean =
-    query.isBlank() || text.contains(query, ignoreCase = true) || author.contains(query, ignoreCase = true)
+  private fun List<QuoteWithFavorite>.sortedForDisplay(): List<QuoteWithFavorite> =
+    sortedWith(compareByDescending<QuoteWithFavorite> { it.isFavorite }.thenBy { it.quote.author })
 
-  private fun List<Quote>.toItems(favoriteIds: Set<String>): List<QuoteItem> =
-    map { QuoteItem(it, it.id in favoriteIds) }
-      .sortedWith(compareByDescending<QuoteItem> { it.isFavorite }.thenBy { it.quote.author })
-
-  private data class LoadState(val isLoading: Boolean = false, val errorMessage: String? = null)
+  private data class RefreshState(val isRefreshing: Boolean = false, val errorMessage: String? = null)
 
   private companion object {
     const val SEARCH_DEBOUNCE_MILLIS = 300L
