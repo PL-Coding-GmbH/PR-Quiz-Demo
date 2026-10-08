@@ -3,4 +3,6 @@ package com.example.prquizdemo
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
-@Serializable data object Main : NavKey
+@Serializable data object QuoteList : NavKey
+
+@Serializable data class QuoteDetail(val quoteId: String) : NavKey
